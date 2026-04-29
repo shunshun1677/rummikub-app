@@ -73,60 +73,52 @@ function App() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      let nextMessage = ''
-      let nextPlayerState: GameState | undefined
+      if (gameState.currentTurn !== 'cpu' || gameState.winner) {
+        return
+      }
 
-      setGameState((current) => {
-        if (current.currentTurn !== 'cpu' || current.winner) {
-          return current
+      const move = getCpuMove(gameState)
+      let nextMessage = move.message
+      let nextState: GameState
+
+      if (move.kind === 'play') {
+        const winner = move.hand.length === 0 ? 'cpu' : null
+        nextState = {
+          ...gameState,
+          board: move.board,
+          cpuHand: move.hand,
+          hasCpuOpened: move.opened,
+          currentTurn: winner ? 'cpu' : 'player',
+          winner,
         }
-
-        const move = getCpuMove(current)
-
-        if (move.kind === 'play') {
-          const winner = move.hand.length === 0 ? 'cpu' : null
-          const nextState: GameState = {
-            ...current,
-            board: move.board,
-            cpuHand: move.hand,
-            hasCpuOpened: move.opened,
-            currentTurn: winner ? 'cpu' : 'player',
-            winner,
-          }
-          nextMessage = move.message
-          nextPlayerState = nextState.currentTurn === 'player' ? nextState : undefined
-
-          return nextState
-        }
-
-        const { tile, newDeck } = drawTile(current.deck)
-        const nextCpuHand = tile ? sortHand([...current.cpuHand, tile]) : current.cpuHand
+      } else {
+        const { tile, newDeck } = drawTile(gameState.deck)
+        const nextCpuHand = tile ? sortHand([...gameState.cpuHand, tile]) : gameState.cpuHand
         const winner =
           tile === null || newDeck.length === 0
-            ? determineWinnerByHandPoints(current.playerHand, nextCpuHand)
+            ? determineWinnerByHandPoints(gameState.playerHand, nextCpuHand)
             : null
+
         nextMessage =
           tile === null
             ? '山札が尽きたため手牌点で勝敗を判定しました。'
             : move.message
-
-        const nextState: GameState = {
-          ...current,
+        nextState = {
+          ...gameState,
           deck: newDeck,
           cpuHand: nextCpuHand,
           currentTurn: winner ? 'cpu' : 'player',
           winner,
         }
-        nextPlayerState = nextState.currentTurn === 'player' ? nextState : undefined
+      }
 
-        return nextState
-      })
+      setGameState(nextState)
 
-      if (nextPlayerState) {
-        setDraft(createDraftFromState(nextPlayerState))
+      if (nextState.currentTurn === 'player') {
+        setDraft(createDraftFromState(nextState))
         setTurnSnapshot({
-          board: cloneBoard(nextPlayerState.board),
-          hand: [...nextPlayerState.playerHand],
+          board: cloneBoard(nextState.board),
+          hand: [...nextState.playerHand],
         })
         setSelection(null)
       }
@@ -135,7 +127,7 @@ function App() {
     }, 700)
 
     return () => window.clearTimeout(timeoutId)
-  }, [gameState.currentTurn, gameState.winner])
+  }, [gameState])
 
   function handleSelectHandTile(tileId: string): void {
     if (!canPlayerAct) {
@@ -329,20 +321,26 @@ function App() {
     }
 
     const { tile, newDeck } = drawTile(gameState.deck)
-    const nextPlayerHand = tile ? sortHand([...turnSnapshot.hand, tile]) : turnSnapshot.hand
+    const nextPlayerHand = tile ? sortHand([...gameState.playerHand, tile]) : gameState.playerHand
     const winner =
       tile === null || newDeck.length === 0
         ? determineWinnerByHandPoints(nextPlayerHand, gameState.cpuHand)
         : null
-
-    setGameState((current) => ({
-      ...current,
+    const nextState: GameState = {
+      ...gameState,
       deck: newDeck,
-      board: cloneBoard(turnSnapshot.board),
+      board: cloneBoard(gameState.board),
       playerHand: nextPlayerHand,
       currentTurn: winner ? 'player' : 'cpu',
       winner,
-    }))
+    }
+
+    setGameState(nextState)
+    setDraft(createDraftFromState(nextState))
+    setTurnSnapshot({
+      board: cloneBoard(nextState.board),
+      hand: [...nextState.playerHand],
+    })
     setSelection(null)
     setMessage(
       tile === null
