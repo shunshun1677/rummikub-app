@@ -192,6 +192,20 @@
   background: #fbfcfd;
 }
 
+.board-zone.drag-over,
+.tile-set.drag-over {
+  border-color: #2f80ed;
+  background: #f4f9ff;
+}
+
+.tile[draggable='true'] {
+  cursor: grab;
+}
+
+.tile[draggable='true']:active {
+  cursor: grabbing;
+}
+
 .tile-set.locked {
   background: #f1f4f6;
 }

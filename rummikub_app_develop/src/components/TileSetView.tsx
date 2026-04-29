@@ -1,3 +1,4 @@
+import { useState, type DragEvent } from 'react'
 import type { SetType, TileSet } from '../types'
 import { TileView } from './TileView'
 
@@ -6,8 +7,10 @@ type TileSetViewProps = {
   isLocked: boolean
   canAddSelected: boolean
   selectedTileId: string | null
+  canDropHandTile: boolean
   onAddSelected: (setId: string) => void
   onSelectTile: (setId: string, tileId: string) => void
+  onDropHandTile: (setId: string, tileId: string) => void
   onChangeType: (setId: string, type: SetType) => void
   onRemoveEmptySet: (setId: string) => void
 }
@@ -17,13 +20,53 @@ export function TileSetView({
   isLocked,
   canAddSelected,
   selectedTileId,
+  canDropHandTile,
   onAddSelected,
   onSelectTile,
+  onDropHandTile,
   onChangeType,
   onRemoveEmptySet,
 }: TileSetViewProps) {
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  function handleDragOver(event: DragEvent<HTMLElement>): void {
+    if (isLocked || !canDropHandTile) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setIsDragOver(true)
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>): void {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragOver(false)
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>): void {
+    if (isLocked || !canDropHandTile) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDragOver(false)
+
+    const tileId = event.dataTransfer.getData('application/x-rummikub-tile-id')
+    if (tileId) {
+      onDropHandTile(set.id, tileId)
+    }
+  }
+
   return (
-    <section className={`tile-set ${isLocked ? 'locked' : ''}`}>
+    <section
+      className={`tile-set ${isLocked ? 'locked' : ''} ${isDragOver ? 'drag-over' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="tile-set-header">
         <select
           value={set.type}
