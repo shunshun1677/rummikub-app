@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import './App.css'
 import { Controls } from './components/Controls'
 import { CpuHand } from './components/CpuHand'
@@ -35,6 +35,7 @@ type TurnSnapshot = {
 }
 
 const initialState = createInitialGameState()
+const TILE_DRAG_MIME_TYPE = 'application/x-rummikub-tile-id'
 
 function App() {
   const [gameState, setGameState] = useState<GameState>(initialState)
@@ -141,6 +142,23 @@ function App() {
     )
   }
 
+  function handleDragStartHandTile(
+    tileId: string,
+    event: DragEvent<HTMLButtonElement>,
+  ): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(TILE_DRAG_MIME_TYPE, tileId)
+    setSelection({ source: 'hand', tileId })
+  }
+
+  function handleDragEndHandTile(): void {
+    setSelection((current) => (current?.source === 'hand' ? null : current))
+  }
+
   function handleSelectBoardTile(setId: string, tileId: string): void {
     if (!canPlayerAct || lockedSetIds.has(setId)) {
       setMessage('初回30点を出す前は、既存の場のタイルを選択できません。')
@@ -211,6 +229,58 @@ function App() {
             set.id === setId ? { ...set, tiles: [...set.tiles, result.tile] } : set,
           ),
         ),
+      }
+    })
+    setSelection(null)
+  }
+
+  function handleDropHandTileToSet(setId: string, tileId: string): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    if (lockedSetIds.has(setId)) {
+      setMessage('初回30点を出す前は、既存の場へ追加できません。')
+      return
+    }
+
+    setDraft((currentDraft) => {
+      const tile = currentDraft.draftHand.find((handTile) => handTile.id === tileId)
+
+      if (!tile) {
+        return currentDraft
+      }
+
+      return {
+        draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
+        draftBoard: removeEmptySets(
+          currentDraft.draftBoard.map((set) =>
+            set.id === setId ? { ...set, tiles: [...set.tiles, tile] } : set,
+          ),
+        ),
+      }
+    })
+    setSelection(null)
+  }
+
+  function handleDropHandTileToNewSet(tileId: string): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    setDraft((currentDraft) => {
+      const tile = currentDraft.draftHand.find((handTile) => handTile.id === tileId)
+
+      if (!tile) {
+        return currentDraft
+      }
+
+      return {
+        draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
+        draftBoard: [
+          ...removeEmptySets(currentDraft.draftBoard),
+          { id: createSetId(), type: newSetType, tiles: [tile] },
+        ],
       }
     })
     setSelection(null)
@@ -379,9 +449,12 @@ function App() {
         board={draft.draftBoard}
         lockedSetIds={lockedSetIds}
         canAddSelected={canPlayerAct && selection !== null}
+        canDropHandTile={canPlayerAct}
         selectedTileId={selectedTileId}
         onAddSelected={handleAddSelectedToSet}
         onSelectTile={handleSelectBoardTile}
+        onDropHandTile={handleDropHandTileToSet}
+        onDropHandTileToNewSet={handleDropHandTileToNewSet}
         onChangeType={handleChangeSetType}
         onRemoveEmptySet={handleRemoveEmptySet}
       />
@@ -403,6 +476,8 @@ function App() {
         selectedTileId={selectedTileId}
         disabled={!canPlayerAct}
         onSelectTile={handleSelectHandTile}
+        onDragStartTile={handleDragStartHandTile}
+        onDragEndTile={handleDragEndHandTile}
       />
     </main>
   )

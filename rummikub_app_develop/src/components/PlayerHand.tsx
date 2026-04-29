@@ -1,3 +1,4 @@
+import type { DragEvent } from 'react'
 import type { Tile } from '../types'
 import { TileView } from './TileView'
 
@@ -6,6 +7,8 @@ type PlayerHandProps = {
   selectedTileId: string | null
   disabled: boolean
   onSelectTile: (tileId: string) => void
+  onDragStartTile: (tileId: string, event: DragEvent<HTMLButtonElement>) => void
+  onDragEndTile: () => void
 }
 
 export function PlayerHand({
@@ -13,6 +16,8 @@ export function PlayerHand({
   selectedTileId,
   disabled,
   onSelectTile,
+  onDragStartTile,
+  onDragEndTile,
 }: PlayerHandProps) {
   return (
     <section className="hand-zone" aria-label="player hand">
@@ -26,8 +31,11 @@ export function PlayerHand({
             key={tile.id}
             tile={tile}
             disabled={disabled}
+            draggable={!disabled}
             isSelected={selectedTileId === tile.id}
             onClick={() => onSelectTile(tile.id)}
+            onDragStart={onDragStartTile}
+            onDragEnd={onDragEndTile}
           />
         ))}
       </div>
