@@ -297,6 +297,7 @@ function App() {
 
     if (!validation.ok) {
       setMessage(validation.message)
+      window.alert(validation.message)
       return
     }
 
@@ -313,6 +314,7 @@ function App() {
     }))
     setSelection(null)
     setMessage(validation.message)
+    window.alert(validation.message)
   }
 
   function handleDrawAndEndTurn(): void {
