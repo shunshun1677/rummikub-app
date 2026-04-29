@@ -1,0 +1,477 @@
+import { useEffect, useMemo, useState } from 'react'
+import './App.css'
+import { Controls } from './components/Controls'
+import { CpuHand } from './components/CpuHand'
+import { GameBoard } from './components/GameBoard'
+import { PlayerHand } from './components/PlayerHand'
+import { StatusBar } from './components/StatusBar'
+import { getCpuMove } from './game/cpu'
+import {
+  cloneBoard,
+  createDraftFromState,
+  createInitialGameState,
+  createSetId,
+  determineWinnerByHandPoints,
+  drawTile,
+  sortHand,
+  validatePlayerTurn,
+} from './game/gameLogic'
+import type { DraftState, GameState, SetType, Tile, TileSet } from './types'
+
+type TileSelection =
+  | {
+      source: 'hand'
+      tileId: string
+    }
+  | {
+      source: 'board'
+      setId: string
+      tileId: string
+    }
+
+type TurnSnapshot = {
+  board: TileSet[]
+  hand: Tile[]
+}
+
+const initialState = createInitialGameState()
+
+function App() {
+  const [gameState, setGameState] = useState<GameState>(initialState)
+  const [draft, setDraft] = useState<DraftState>(() => createDraftFromState(initialState))
+  const [turnSnapshot, setTurnSnapshot] = useState<TurnSnapshot>(() => ({
+    board: cloneBoard(initialState.board),
+    hand: [...initialState.playerHand],
+  }))
+  const [selection, setSelection] = useState<TileSelection | null>(null)
+  const [newSetType, setNewSetType] = useState<SetType>('run')
+  const [message, setMessage] = useState('手牌を選択して、新しいセットか場のセットに追加してください。')
+
+  const isCpuThinking = gameState.currentTurn === 'cpu' && !gameState.winner
+  const canPlayerAct = gameState.currentTurn === 'player' && !gameState.winner && !isCpuThinking
+  const originalSetIds = useMemo(
+    () => new Set(turnSnapshot.board.map((set) => set.id)),
+    [turnSnapshot.board],
+  )
+  const lockedSetIds = useMemo(() => {
+    if (gameState.hasPlayerOpened) {
+      return new Set<string>()
+    }
+
+    return originalSetIds
+  }, [gameState.hasPlayerOpened, originalSetIds])
+  const selectedTileId = selection?.tileId ?? null
+  const selectedLabel = useMemo(
+    () => getSelectedLabel(selection, draft),
+    [draft, selection],
+  )
+  const hasBoardSelection = selection?.source === 'board'
+
+  useEffect(() => {
+    if (gameState.currentTurn !== 'cpu' || gameState.winner) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      let nextMessage = ''
+      let nextPlayerState: GameState | undefined
+
+      setGameState((current) => {
+        if (current.currentTurn !== 'cpu' || current.winner) {
+          return current
+        }
+
+        const move = getCpuMove(current)
+
+        if (move.kind === 'play') {
+          const winner = move.hand.length === 0 ? 'cpu' : null
+          const nextState: GameState = {
+            ...current,
+            board: move.board,
+            cpuHand: move.hand,
+            hasCpuOpened: move.opened,
+            currentTurn: winner ? 'cpu' : 'player',
+            winner,
+          }
+          nextMessage = move.message
+          nextPlayerState = nextState.currentTurn === 'player' ? nextState : undefined
+
+          return nextState
+        }
+
+        const { tile, newDeck } = drawTile(current.deck)
+        const nextCpuHand = tile ? sortHand([...current.cpuHand, tile]) : current.cpuHand
+        const winner =
+          tile === null || newDeck.length === 0
+            ? determineWinnerByHandPoints(current.playerHand, nextCpuHand)
+            : null
+        nextMessage =
+          tile === null
+            ? '山札が尽きたため手牌点で勝敗を判定しました。'
+            : move.message
+
+        const nextState: GameState = {
+          ...current,
+          deck: newDeck,
+          cpuHand: nextCpuHand,
+          currentTurn: winner ? 'cpu' : 'player',
+          winner,
+        }
+        nextPlayerState = nextState.currentTurn === 'player' ? nextState : undefined
+
+        return nextState
+      })
+
+      if (nextPlayerState) {
+        setDraft(createDraftFromState(nextPlayerState))
+        setTurnSnapshot({
+          board: cloneBoard(nextPlayerState.board),
+          hand: [...nextPlayerState.playerHand],
+        })
+        setSelection(null)
+      }
+
+      setMessage(nextMessage)
+    }, 700)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [gameState.currentTurn, gameState.winner])
+
+  function handleSelectHandTile(tileId: string): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    setSelection((current) =>
+      current?.source === 'hand' && current.tileId === tileId
+        ? null
+        : { source: 'hand', tileId },
+    )
+  }
+
+  function handleSelectBoardTile(setId: string, tileId: string): void {
+    if (!canPlayerAct || lockedSetIds.has(setId)) {
+      setMessage('初回30点を出す前は、既存の場のタイルを選択できません。')
+      return
+    }
+
+    setSelection((current) =>
+      current?.source === 'board' && current.tileId === tileId
+        ? null
+        : { source: 'board', setId, tileId },
+    )
+  }
+
+  function handleCreateSet(): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    setDraft((currentDraft) => {
+      if (!selection) {
+        return {
+          ...currentDraft,
+          draftBoard: [
+            ...currentDraft.draftBoard,
+            { id: createSetId(), type: newSetType, tiles: [] },
+          ],
+        }
+      }
+
+      const result = takeSelectedTile(currentDraft, selection)
+
+      if (!result) {
+        return currentDraft
+      }
+
+      return {
+        draftHand: result.draftHand,
+        draftBoard: [
+          ...removeEmptySets(result.draftBoard),
+          { id: createSetId(), type: newSetType, tiles: [result.tile] },
+        ],
+      }
+    })
+    setSelection(null)
+  }
+
+  function handleAddSelectedToSet(setId: string): void {
+    if (!canPlayerAct || !selection) {
+      return
+    }
+
+    if (lockedSetIds.has(setId)) {
+      setMessage('初回30点を出す前は、既存の場へ追加できません。')
+      return
+    }
+
+    setDraft((currentDraft) => {
+      const result = takeSelectedTile(currentDraft, selection)
+
+      if (!result) {
+        return currentDraft
+      }
+
+      return {
+        draftHand: result.draftHand,
+        draftBoard: removeEmptySets(
+          result.draftBoard.map((set) =>
+            set.id === setId ? { ...set, tiles: [...set.tiles, result.tile] } : set,
+          ),
+        ),
+      }
+    })
+    setSelection(null)
+  }
+
+  function handleReturnSelectedToHand(): void {
+    if (!canPlayerAct || selection?.source !== 'board') {
+      return
+    }
+
+    if (lockedSetIds.has(selection.setId)) {
+      setMessage('初回30点を出す前は、既存の場のタイルを手札へ戻せません。')
+      return
+    }
+
+    setDraft((currentDraft) => {
+      const result = takeSelectedTile(currentDraft, selection)
+
+      if (!result) {
+        return currentDraft
+      }
+
+      return {
+        draftBoard: removeEmptySets(result.draftBoard),
+        draftHand: sortHand([...result.draftHand, result.tile]),
+      }
+    })
+    setSelection(null)
+  }
+
+  function handleChangeSetType(setId: string, type: SetType): void {
+    if (!canPlayerAct || lockedSetIds.has(setId)) {
+      return
+    }
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      draftBoard: currentDraft.draftBoard.map((set) =>
+        set.id === setId ? { ...set, type } : set,
+      ),
+    }))
+  }
+
+  function handleRemoveEmptySet(setId: string): void {
+    if (!canPlayerAct || lockedSetIds.has(setId)) {
+      return
+    }
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      draftBoard: currentDraft.draftBoard.filter(
+        (set) => set.id !== setId || set.tiles.length > 0,
+      ),
+    }))
+    setSelection((current) =>
+      current?.source === 'board' && current.setId === setId ? null : current,
+    )
+  }
+
+  function handleResetDraft(): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    setDraft({
+      draftBoard: cloneBoard(turnSnapshot.board),
+      draftHand: [...turnSnapshot.hand],
+    })
+    setSelection(null)
+    setMessage('このターン開始時点へ戻しました。')
+  }
+
+  function handleEndTurn(): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    const validation = validatePlayerTurn(
+      draft,
+      turnSnapshot.board,
+      turnSnapshot.hand,
+      gameState.hasPlayerOpened,
+    )
+
+    if (!validation.ok) {
+      setMessage(validation.message)
+      return
+    }
+
+    const nextPlayerHand = sortHand(draft.draftHand)
+    const winner = nextPlayerHand.length === 0 ? 'player' : null
+
+    setGameState((current) => ({
+      ...current,
+      board: cloneBoard(draft.draftBoard),
+      playerHand: nextPlayerHand,
+      hasPlayerOpened: validation.hasOpened,
+      currentTurn: winner ? 'player' : 'cpu',
+      winner,
+    }))
+    setSelection(null)
+    setMessage(validation.message)
+  }
+
+  function handleDrawAndEndTurn(): void {
+    if (!canPlayerAct) {
+      return
+    }
+
+    const { tile, newDeck } = drawTile(gameState.deck)
+    const nextPlayerHand = tile ? sortHand([...turnSnapshot.hand, tile]) : turnSnapshot.hand
+    const winner =
+      tile === null || newDeck.length === 0
+        ? determineWinnerByHandPoints(nextPlayerHand, gameState.cpuHand)
+        : null
+
+    setGameState((current) => ({
+      ...current,
+      deck: newDeck,
+      board: cloneBoard(turnSnapshot.board),
+      playerHand: nextPlayerHand,
+      currentTurn: winner ? 'player' : 'cpu',
+      winner,
+    }))
+    setSelection(null)
+    setMessage(
+      tile === null
+        ? '山札が尽きたため手牌点で勝敗を判定しました。'
+        : '1枚引いてターンを終了しました。',
+    )
+  }
+
+  function handleNewGame(): void {
+    const nextState = createInitialGameState()
+
+    setGameState(nextState)
+    setDraft(createDraftFromState(nextState))
+    setTurnSnapshot({
+      board: cloneBoard(nextState.board),
+      hand: [...nextState.playerHand],
+    })
+    setSelection(null)
+    setMessage('新しいゲームを開始しました。')
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="app-header">
+        <div>
+          <p className="eyebrow">Rummikub style duel</p>
+          <h1>ラミーキューブ</h1>
+        </div>
+      </header>
+
+      <StatusBar state={gameState} message={message} isCpuThinking={isCpuThinking} />
+      <CpuHand tileCount={gameState.cpuHand.length} />
+      <GameBoard
+        board={draft.draftBoard}
+        lockedSetIds={lockedSetIds}
+        canAddSelected={canPlayerAct && selection !== null}
+        selectedTileId={selectedTileId}
+        onAddSelected={handleAddSelectedToSet}
+        onSelectTile={handleSelectBoardTile}
+        onChangeType={handleChangeSetType}
+        onRemoveEmptySet={handleRemoveEmptySet}
+      />
+      <Controls
+        selectedLabel={selectedLabel}
+        newSetType={newSetType}
+        canAct={canPlayerAct}
+        hasBoardSelection={hasBoardSelection}
+        onNewSetTypeChange={setNewSetType}
+        onCreateSet={handleCreateSet}
+        onReturnSelectedToHand={handleReturnSelectedToHand}
+        onResetDraft={handleResetDraft}
+        onEndTurn={handleEndTurn}
+        onDrawAndEndTurn={handleDrawAndEndTurn}
+        onNewGame={handleNewGame}
+      />
+      <PlayerHand
+        hand={draft.draftHand}
+        selectedTileId={selectedTileId}
+        disabled={!canPlayerAct}
+        onSelectTile={handleSelectHandTile}
+      />
+    </main>
+  )
+}
+
+function takeSelectedTile(
+  draft: DraftState,
+  selection: TileSelection,
+): (DraftState & { tile: Tile }) | null {
+  if (selection.source === 'hand') {
+    const tile = draft.draftHand.find((handTile) => handTile.id === selection.tileId)
+
+    if (!tile) {
+      return null
+    }
+
+    return {
+      tile,
+      draftHand: draft.draftHand.filter((handTile) => handTile.id !== selection.tileId),
+      draftBoard: cloneBoard(draft.draftBoard),
+    }
+  }
+
+  let movedTile: Tile | null = null
+  const draftBoard = draft.draftBoard.map((set) => {
+    if (set.id !== selection.setId) {
+      return { ...set, tiles: [...set.tiles] }
+    }
+
+    movedTile = set.tiles.find((tile) => tile.id === selection.tileId) ?? null
+    return {
+      ...set,
+      tiles: set.tiles.filter((tile) => tile.id !== selection.tileId),
+    }
+  })
+
+  if (!movedTile) {
+    return null
+  }
+
+  return {
+    tile: movedTile,
+    draftHand: [...draft.draftHand],
+    draftBoard,
+  }
+}
+
+function removeEmptySets(board: TileSet[]): TileSet[] {
+  return board.filter((set) => set.tiles.length > 0)
+}
+
+function getSelectedLabel(selection: TileSelection | null, draft: DraftState): string {
+  if (!selection) {
+    return 'なし'
+  }
+
+  const tile =
+    selection.source === 'hand'
+      ? draft.draftHand.find((handTile) => handTile.id === selection.tileId)
+      : draft.draftBoard
+          .flatMap((set) => set.tiles)
+          .find((boardTile) => boardTile.id === selection.tileId)
+
+  if (!tile) {
+    return 'なし'
+  }
+
+  const label = tile.color === 'joker' ? 'Joker' : `${tile.color} ${tile.number}`
+  return selection.source === 'hand' ? `手札: ${label}` : `場: ${label}`
+}
+
+export default App
