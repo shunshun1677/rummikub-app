@@ -115,6 +115,7 @@
 }
 
 .tile {
+  position: relative;
   width: 42px;
   height: 58px;
   border: 2px solid #d4d9de;
@@ -142,6 +143,33 @@
   transform: translateY(-3px);
 }
 
+.tile.recently-drawn {
+  border-color: #d93636;
+  box-shadow:
+    0 0 0 3px rgba(217, 54, 54, 0.22),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.04);
+}
+
+.tile.recently-drawn::after {
+  content: 'new';
+  position: absolute;
+  top: -9px;
+  right: -10px;
+  min-width: 24px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #d93636;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .tile-red {
   color: #c7362e;
 }
@@ -151,7 +179,7 @@
 }
 
 .tile-yellow {
-  color: #b88704;
+  color: #16803a;
 }
 
 .tile-black {

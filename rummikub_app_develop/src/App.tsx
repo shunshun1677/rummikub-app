@@ -52,6 +52,7 @@ function App() {
   }))
   const [selection, setSelection] = useState<TileSelection | null>(null)
   const [newSetType, setNewSetType] = useState<SetType>('run')
+  const [lastDrawnTileId, setLastDrawnTileId] = useState<string | null>(null)
   const [message, setMessage] = useState('手牌を選択して、新しいセットか場のセットに追加してください。')
 
   const isCpuThinking = gameState.currentTurn === 'cpu' && !gameState.winner
@@ -394,6 +395,7 @@ function App() {
       winner,
     }))
     setSelection(null)
+    setLastDrawnTileId(null)
     setMessage(validation.message)
     window.alert(validation.message)
   }
@@ -430,6 +432,7 @@ function App() {
       hand: [...nextState.playerHand],
     })
     setSelection(null)
+    setLastDrawnTileId(tile?.id ?? null)
     setMessage(
       tile === null
         ? '山札が尽きたため手牌点で勝敗を判定しました。'
@@ -447,6 +450,7 @@ function App() {
       hand: [...nextState.playerHand],
     })
     setSelection(null)
+    setLastDrawnTileId(null)
     setMessage('新しいゲームを開始しました。')
   }
 
@@ -491,6 +495,7 @@ function App() {
       <PlayerHand
         hand={draft.draftHand}
         selectedTileId={selectedTileId}
+        recentlyDrawnTileId={lastDrawnTileId}
         disabled={!canPlayerAct}
         onSelectTile={handleSelectHandTile}
         onDragStartTile={handleDragStartHandTile}

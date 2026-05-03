@@ -4,6 +4,7 @@ import type { Tile } from '../types'
 type TileViewProps = {
   tile: Tile
   isSelected?: boolean
+  isRecentlyDrawn?: boolean
   isHidden?: boolean
   disabled?: boolean
   draggable?: boolean
@@ -15,6 +16,7 @@ type TileViewProps = {
 export function TileView({
   tile,
   isSelected = false,
+  isRecentlyDrawn = false,
   isHidden = false,
   disabled = false,
   draggable = false,
@@ -28,14 +30,22 @@ export function TileView({
     : tile.color === 'joker'
       ? 'joker'
       : `${tile.color} ${tile.number}`
+  const tileStateClassNames = [
+    'tile',
+    `tile-${isHidden ? 'hidden' : tile.color}`,
+    isSelected ? 'selected' : '',
+    isRecentlyDrawn ? 'recently-drawn' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <button
       type="button"
-      className={`tile tile-${isHidden ? 'hidden' : tile.color} ${isSelected ? 'selected' : ''}`}
+      className={tileStateClassNames}
       disabled={disabled}
       aria-pressed={isSelected}
-      aria-label={ariaLabel}
+      aria-label={isRecentlyDrawn ? `${ariaLabel}, 直近で引いた牌` : ariaLabel}
       draggable={draggable && !disabled}
       onClick={onClick}
       onDragStart={(event) => onDragStart?.(tile.id, event)}
