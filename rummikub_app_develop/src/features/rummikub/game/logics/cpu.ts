@@ -1,4 +1,4 @@
-import type { CpuMove, GameState, Tile, TileSet } from '../types'
+import type { CpuMove, GameState, Tile, TileSet } from '../../_shared/types/types'
 import {
   calculateSetPoints,
   cloneBoard,

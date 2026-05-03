@@ -6,7 +6,7 @@ import {
   type PlayerTurnValidation,
   type Tile,
   type TileSet,
-} from '../types'
+} from '../../_shared/types/types'
 
 const HAND_SIZE = 14
 const JOKER_HAND_POINTS = 30

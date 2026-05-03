@@ -1,5 +1,5 @@
-import type { GameState } from '../types'
-import { calculateHandPoints } from '../game/gameLogic'
+import type { GameState } from '../../_shared/types/types'
+import { calculateHandPoints } from '../logics/gameLogic'
 
 type StatusBarProps = {
   state: GameState

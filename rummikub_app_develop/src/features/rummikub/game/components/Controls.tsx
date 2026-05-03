@@ -1,4 +1,4 @@
-import type { SetType } from '../types'
+import type { SetType } from '../../_shared/types/types'
 
 type ControlsProps = {
   selectedLabel: string

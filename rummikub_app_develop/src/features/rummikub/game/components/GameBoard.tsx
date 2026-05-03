@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from 'react'
-import type { SetType, TileSet } from '../types'
+import type { SetType, TileSet } from '../../_shared/types/types'
 import { TileSetView } from './TileSetView'
 
 type GameBoardProps = {

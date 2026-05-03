@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react'
-import type { Tile } from '../types'
+import type { Tile } from '../../_shared/types/types'
 import { TileView } from './TileView'
 
 type PlayerHandProps = {
