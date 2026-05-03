@@ -4,6 +4,7 @@ type ControlsProps = {
   selectedLabel: string
   newSetType: SetType
   canAct: boolean
+  canDrawAndEndTurn: boolean
   hasBoardSelection: boolean
   onNewSetTypeChange: (type: SetType) => void
   onCreateSet: () => void
@@ -18,6 +19,7 @@ export function Controls({
   selectedLabel,
   newSetType,
   canAct,
+  canDrawAndEndTurn,
   hasBoardSelection,
   onNewSetTypeChange,
   onCreateSet,
@@ -63,7 +65,16 @@ export function Controls({
         <button type="button" disabled={!canAct} onClick={onEndTurn}>
           ターン終了
         </button>
-        <button type="button" disabled={!canAct} onClick={onDrawAndEndTurn}>
+        <button
+          type="button"
+          disabled={!canDrawAndEndTurn}
+          title={
+            canAct && !canDrawAndEndTurn
+              ? '未確定の変更があるため、元に戻すかターン終了で確定してください。'
+              : undefined
+          }
+          onClick={onDrawAndEndTurn}
+        >
           1枚引いて終了
         </button>
         <button type="button" onClick={onNewGame}>
