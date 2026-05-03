@@ -34,6 +34,12 @@ type TurnSnapshot = {
   hand: Tile[]
 }
 
+type TurnChangeStatus = {
+  hasBoardChanges: boolean
+  hasHandChanges: boolean
+  hasAnyChanges: boolean
+}
+
 const initialState = createInitialGameState()
 const TILE_DRAG_MIME_TYPE = 'application/x-rummikub-tile-id'
 
@@ -67,6 +73,11 @@ function App() {
     [draft, selection],
   )
   const hasBoardSelection = selection?.source === 'board'
+  const turnChangeStatus = useMemo(
+    () => getTurnChangeStatus(draft, turnSnapshot),
+    [draft, turnSnapshot],
+  )
+  const canDrawAndEndTurn = canPlayerAct && !turnChangeStatus.hasAnyChanges
 
   useEffect(() => {
     if (gameState.currentTurn !== 'cpu' || gameState.winner) {
@@ -392,6 +403,11 @@ function App() {
       return
     }
 
+    if (turnChangeStatus.hasAnyChanges) {
+      setMessage('場や手牌に未確定の変更があります。元に戻すか、ターン終了で確定してください。')
+      return
+    }
+
     const { tile, newDeck } = drawTile(gameState.deck)
     const nextPlayerHand = tile ? sortHand([...gameState.playerHand, tile]) : gameState.playerHand
     const winner =
@@ -462,6 +478,7 @@ function App() {
         selectedLabel={selectedLabel}
         newSetType={newSetType}
         canAct={canPlayerAct}
+        canDrawAndEndTurn={canDrawAndEndTurn}
         hasBoardSelection={hasBoardSelection}
         onNewSetTypeChange={setNewSetType}
         onCreateSet={handleCreateSet}
@@ -527,6 +544,33 @@ function takeSelectedTile(
 
 function removeEmptySets(board: TileSet[]): TileSet[] {
   return board.filter((set) => set.tiles.length > 0)
+}
+
+function getTurnChangeStatus(
+  draft: DraftState,
+  snapshot: TurnSnapshot,
+): TurnChangeStatus {
+  const hasBoardChanges = getBoardSignature(draft.draftBoard) !== getBoardSignature(snapshot.board)
+  const hasHandChanges = getHandSignature(draft.draftHand) !== getHandSignature(snapshot.hand)
+
+  return {
+    hasBoardChanges,
+    hasHandChanges,
+    hasAnyChanges: hasBoardChanges || hasHandChanges,
+  }
+}
+
+function getBoardSignature(board: TileSet[]): string {
+  return board
+    .map((set) => `${set.id}:${set.type}:${set.tiles.map((tile) => tile.id).join(',')}`)
+    .join('|')
+}
+
+function getHandSignature(hand: Tile[]): string {
+  return hand
+    .map((tile) => tile.id)
+    .sort()
+    .join('|')
 }
 
 function getSelectedLabel(selection: TileSelection | null, draft: DraftState): string {
