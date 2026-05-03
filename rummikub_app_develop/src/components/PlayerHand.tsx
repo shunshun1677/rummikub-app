@@ -5,6 +5,7 @@ import { TileView } from './TileView'
 type PlayerHandProps = {
   hand: Tile[]
   selectedTileId: string | null
+  recentlyDrawnTileId: string | null
   disabled: boolean
   onSelectTile: (tileId: string) => void
   onDragStartTile: (tileId: string, event: DragEvent<HTMLButtonElement>) => void
@@ -14,6 +15,7 @@ type PlayerHandProps = {
 export function PlayerHand({
   hand,
   selectedTileId,
+  recentlyDrawnTileId,
   disabled,
   onSelectTile,
   onDragStartTile,
@@ -33,6 +35,7 @@ export function PlayerHand({
             disabled={disabled}
             draggable={!disabled}
             isSelected={selectedTileId === tile.id}
+            isRecentlyDrawn={recentlyDrawnTileId === tile.id}
             onClick={() => onSelectTile(tile.id)}
             onDragStart={onDragStartTile}
             onDragEnd={onDragEndTile}
