@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import './styles/game.css'
 import { Controls } from './components/Controls'
-import { CpuHand } from './components/CpuHand'
 import { GameResultDetails } from './components/GameResultDetails'
 import { GameBoard } from './components/GameBoard'
 import {
@@ -71,6 +70,7 @@ export function RummikubGame() {
   const [lastDrawnTileId, setLastDrawnTileId] = useState<string | null>(null)
   const [handSortMode, setHandSortMode] = useState<HandSortMode>('color')
   const [confirmBeforeEndTurn, setConfirmBeforeEndTurn] = useState(true)
+  const [lastCpuPlayedSetIds, setLastCpuPlayedSetIds] = useState<Set<string>>(() => new Set())
   const [message, setMessage] = useState('牌をドラッグして場に置いてください。')
 
   const isCpuThinking = gameState.currentTurn === 'cpu' && !gameState.winner
@@ -115,6 +115,11 @@ export function RummikubGame() {
 
       if (move.kind === 'play') {
         const winner = move.hand.length === 0 ? 'cpu' : null
+        const currentBoardSetIds = new Set(gameState.board.map((set) => set.id))
+        const playedSetIds = move.board
+          .filter((set) => !currentBoardSetIds.has(set.id))
+          .map((set) => set.id)
+
         nextState = {
           ...gameState,
           board: move.board,
@@ -123,6 +128,7 @@ export function RummikubGame() {
           currentTurn: winner ? 'cpu' : 'player',
           winner,
         }
+        setLastCpuPlayedSetIds(new Set(playedSetIds))
       } else {
         const { tile, newDeck } = drawTile(gameState.deck)
         const nextCpuHand = tile ? sortHand([...gameState.cpuHand, tile]) : gameState.cpuHand
@@ -142,6 +148,7 @@ export function RummikubGame() {
           currentTurn: winner ? 'cpu' : 'player',
           winner,
         }
+        setLastCpuPlayedSetIds(new Set())
       }
 
       setGameState(nextState)
@@ -464,6 +471,7 @@ export function RummikubGame() {
     setSelection(null)
     setSelectedHandTileIds(new Set())
     setLastDrawnTileId(null)
+    setLastCpuPlayedSetIds(new Set())
     setMessage('新しいゲームを開始しました。')
   }
 
@@ -501,7 +509,6 @@ export function RummikubGame() {
 
       <StatusBar state={gameState} message={message} isCpuThinking={isCpuThinking} />
       <GameResultDetails state={gameState} />
-      <CpuHand hand={gameState.cpuHand} revealTiles={gameState.winner !== null} />
       <GameTools
         handSortMode={handSortMode}
         confirmBeforeEndTurn={confirmBeforeEndTurn}
@@ -511,6 +518,7 @@ export function RummikubGame() {
       <GameBoard
         board={draft.draftBoard}
         lockedSetIds={lockedSetIds}
+        highlightedSetIds={lastCpuPlayedSetIds}
         canDropHandTile={canPlayerAct}
         selectedTileId={selectedBoardTileId}
         onDragStartTile={handleDragStartBoardTile}

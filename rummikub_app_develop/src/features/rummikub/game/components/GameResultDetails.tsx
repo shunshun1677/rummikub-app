@@ -1,5 +1,6 @@
 import type { GameState } from '../../_shared/types/types'
 import { calculateHandPoints } from '../logics/gameLogic'
+import { TileView } from './TileView'
 
 type GameResultDetailsProps = {
   state: GameState
@@ -45,6 +46,16 @@ export function GameResultDetails({ state }: GameResultDetailsProps) {
           <strong>{pointDiff}点</strong>
         </div>
       </div>
+      {state.cpuHand.length > 0 ? (
+        <div className="result-cpu-hand">
+          <span className="status-label">CPU残り手牌</span>
+          <div className="tile-row result-cpu-row">
+            {state.cpuHand.map((tile) => (
+              <TileView key={tile.id} tile={tile} disabled />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

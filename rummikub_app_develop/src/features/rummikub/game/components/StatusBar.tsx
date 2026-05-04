@@ -27,6 +27,10 @@ export function StatusBar({ state, message, isCpuThinking }: StatusBarProps) {
         <strong>{state.hasPlayerOpened ? '完了' : '未完了'}</strong>
       </div>
       <div>
+        <span className="status-label">CPU手牌</span>
+        <strong>{state.cpuHand.length}枚</strong>
+      </div>
+      <div>
         <span className="status-label">手牌点</span>
         <strong>{calculateHandPoints(state.playerHand)}</strong>
       </div>

@@ -5,6 +5,7 @@ import { TileSetView } from './TileSetView'
 type GameBoardProps = {
   board: TileSet[]
   lockedSetIds: Set<string>
+  highlightedSetIds: Set<string>
   canDropHandTile: boolean
   selectedTileId: string | null
   onDragStartTile: (
@@ -21,6 +22,7 @@ type GameBoardProps = {
 export function GameBoard({
   board,
   lockedSetIds,
+  highlightedSetIds,
   canDropHandTile,
   selectedTileId,
   onDragStartTile,
@@ -83,6 +85,7 @@ export function GameBoard({
               key={set.id}
               set={set}
               isLocked={lockedSetIds.has(set.id)}
+              isHighlighted={highlightedSetIds.has(set.id)}
               canDropHandTile={canDropHandTile}
               selectedTileId={selectedTileId}
               onDragStartTile={onDragStartTile}

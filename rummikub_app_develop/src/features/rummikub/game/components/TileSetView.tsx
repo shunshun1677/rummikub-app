@@ -6,6 +6,7 @@ import { TileView } from './TileView'
 type TileSetViewProps = {
   set: TileSet
   isLocked: boolean
+  isHighlighted: boolean
   selectedTileId: string | null
   canDropHandTile: boolean
   onDragStartTile: (
@@ -21,6 +22,7 @@ type TileSetViewProps = {
 export function TileSetView({
   set,
   isLocked,
+  isHighlighted,
   selectedTileId,
   canDropHandTile,
   onDragStartTile,
@@ -96,7 +98,7 @@ export function TileSetView({
     <section
       className={`tile-set ${isLocked ? 'locked' : ''} ${isDragOver ? 'drag-over' : ''} ${
         isUnconfirmed ? 'unconfirmed' : ''
-      }`}
+      } ${isHighlighted ? 'cpu-played' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -105,7 +107,7 @@ export function TileSetView({
         <span className={`set-type-badge ${isUnconfirmed ? 'unconfirmed' : ''}`}>
           {setTypeLabel}
         </span>
-        <span>{set.tiles.length}枚</span>
+        <span>{isHighlighted ? `CPU ${set.tiles.length}枚` : `${set.tiles.length}枚`}</span>
       </div>
 
       <div className="tile-row set-row">
