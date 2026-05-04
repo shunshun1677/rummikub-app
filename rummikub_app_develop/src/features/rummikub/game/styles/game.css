@@ -109,6 +109,10 @@
   padding: 12px;
 }
 
+.board-zone:has(.board-grid) {
+  min-height: 176px;
+}
+
 .hand-zone {
   flex: 0 0 auto;
 }
@@ -247,14 +251,17 @@
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+  grid-template-columns: repeat(auto-fill, 248px);
   gap: 10px;
+  align-items: start;
+  justify-content: start;
   padding-bottom: 4px;
 }
 
 .tile-set {
   border: 1px solid #dce2e8;
   border-radius: 8px;
+  min-height: 128px;
   padding: 10px;
   background: #fbfcfd;
 }
@@ -323,7 +330,7 @@
 }
 
 .set-row {
-  min-height: 64px;
+  min-height: 78px;
   align-content: start;
 }
 
@@ -352,7 +359,7 @@
 
 .game-tools {
   display: grid;
-  grid-template-columns: minmax(170px, auto) minmax(150px, auto) minmax(180px, auto);
+  grid-template-columns: minmax(170px, auto) minmax(180px, auto);
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -546,11 +553,12 @@ select:disabled {
 }
 
 .density-compact .board-grid {
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, 220px);
   gap: 7px;
 }
 
 .density-compact .tile-set {
+  min-height: 142px;
   padding: 7px;
 }
 

@@ -6,7 +6,6 @@ import { GameResultDetails } from './components/GameResultDetails'
 import { GameBoard } from './components/GameBoard'
 import {
   GameTools,
-  type DensityMode,
   type HandSortMode,
 } from './components/GameTools'
 import { PlayerHand } from './components/PlayerHand'
@@ -68,9 +67,9 @@ export function RummikubGame() {
     hand: [...initialState.playerHand],
   }))
   const [selection, setSelection] = useState<TileSelection | null>(null)
+  const [selectedHandTileIds, setSelectedHandTileIds] = useState<Set<string>>(() => new Set())
   const [lastDrawnTileId, setLastDrawnTileId] = useState<string | null>(null)
   const [handSortMode, setHandSortMode] = useState<HandSortMode>('color')
-  const [densityMode, setDensityMode] = useState<DensityMode>('comfortable')
   const [confirmBeforeEndTurn, setConfirmBeforeEndTurn] = useState(true)
   const [message, setMessage] = useState('牌をドラッグして場に置いてください。')
 
@@ -87,7 +86,7 @@ export function RummikubGame() {
 
     return originalSetIds
   }, [gameState.hasPlayerOpened, originalSetIds])
-  const selectedTileId = selection?.tileId ?? null
+  const selectedBoardTileId = selection?.source === 'board' ? selection.tileId : null
   const hasBoardSelection = selection?.source === 'board'
   const turnChangeStatus = useMemo(
     () => getTurnChangeStatus(draft, turnSnapshot),
@@ -155,6 +154,7 @@ export function RummikubGame() {
           hand: [...nextState.playerHand],
         })
         setSelection(null)
+        setSelectedHandTileIds(new Set())
       }
 
       setMessage(nextMessage)
@@ -168,11 +168,18 @@ export function RummikubGame() {
       return
     }
 
-    setSelection((current) =>
-      current?.source === 'hand' && current.tileId === tileId
-        ? null
-        : { source: 'hand', tileId },
-    )
+    setSelection(null)
+    setSelectedHandTileIds((current) => {
+      const next = new Set(current)
+
+      if (next.has(tileId)) {
+        next.delete(tileId)
+      } else {
+        next.add(tileId)
+      }
+
+      return next
+    })
   }
 
   function handleDragStartHandTile(
@@ -183,13 +190,18 @@ export function RummikubGame() {
       return
     }
 
+    const draggedTileIds = selectedHandTileIds.has(tileId)
+      ? [...selectedHandTileIds]
+      : [tileId]
+
     event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(TILE_DRAG_MIME_TYPE, tileId)
-    setSelection({ source: 'hand', tileId })
+    event.dataTransfer.setData(TILE_DRAG_MIME_TYPE, draggedTileIds.join('|'))
+    setSelectedHandTileIds(new Set(draggedTileIds))
+    setSelection(null)
   }
 
   function handleDragEndHandTile(): void {
-    setSelection((current) => (current?.source === 'hand' ? null : current))
+    return
   }
 
   function handleDragStartBoardTile(
@@ -203,6 +215,7 @@ export function RummikubGame() {
 
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData(TILE_DRAG_MIME_TYPE, tileId)
+    setSelectedHandTileIds(new Set())
     setSelection({ source: 'board', setId, tileId })
   }
 
@@ -216,6 +229,7 @@ export function RummikubGame() {
       return
     }
 
+    setSelectedHandTileIds(new Set())
     setSelection((current) =>
       current?.source === 'board' && current.tileId === tileId
         ? null
@@ -225,7 +239,7 @@ export function RummikubGame() {
 
   function handleDropTileToSet(
     setId: string,
-    tileId: string,
+    draggedTileIds: string,
     tileIndex?: number,
   ): void {
     if (!canPlayerAct) {
@@ -237,31 +251,51 @@ export function RummikubGame() {
       return
     }
 
-    const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
-    if (sourceSetId && lockedSetIds.has(sourceSetId)) {
+    const tileIds = parseDraggedTileIds(draggedTileIds)
+    if (tileIds.length === 0) {
+      return
+    }
+
+    const hasLockedSource = tileIds.some((tileId) => {
+      const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
+      return sourceSetId ? lockedSetIds.has(sourceSetId) : false
+    })
+
+    if (hasLockedSource) {
       setMessage('初回30点を出す前は、既存の場のタイルを移動できません。')
       return
     }
 
     updateDraftWithHistory((currentDraft) =>
-      moveTileToSet(currentDraft, tileId, setId, tileIndex),
+      moveTilesToSet(currentDraft, tileIds, setId, tileIndex),
     )
     setSelection(null)
+    setSelectedHandTileIds(new Set())
   }
 
-  function handleDropTileToNewSet(tileId: string): void {
+  function handleDropTileToNewSet(draggedTileIds: string): void {
     if (!canPlayerAct) {
       return
     }
 
-    const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
-    if (sourceSetId && lockedSetIds.has(sourceSetId)) {
+    const tileIds = parseDraggedTileIds(draggedTileIds)
+    if (tileIds.length === 0) {
+      return
+    }
+
+    const hasLockedSource = tileIds.some((tileId) => {
+      const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
+      return sourceSetId ? lockedSetIds.has(sourceSetId) : false
+    })
+
+    if (hasLockedSource) {
       setMessage('初回30点を出す前は、既存の場のタイルを移動できません。')
       return
     }
 
-    updateDraftWithHistory((currentDraft) => moveTileToNewSet(currentDraft, tileId))
+    updateDraftWithHistory((currentDraft) => moveTilesToNewSet(currentDraft, tileIds))
     setSelection(null)
+    setSelectedHandTileIds(new Set())
   }
 
   function handleReturnSelectedToHand(): void {
@@ -287,6 +321,7 @@ export function RummikubGame() {
       }
     })
     setSelection(null)
+    setSelectedHandTileIds(new Set())
   }
 
   function handleUndoDraft(): void {
@@ -303,6 +338,7 @@ export function RummikubGame() {
     setDraft(cloneDraft(previousDraft))
     setDraftHistory((current) => current.slice(0, -1))
     setSelection(null)
+    setSelectedHandTileIds(new Set())
     setMessage('直前の操作を戻しました。')
   }
 
@@ -317,6 +353,7 @@ export function RummikubGame() {
     })
     setDraftHistory([])
     setSelection(null)
+    setSelectedHandTileIds(new Set())
     setMessage('このターン開始時点へ戻しました。')
   }
 
@@ -364,6 +401,7 @@ export function RummikubGame() {
     }))
     setDraftHistory([])
     setSelection(null)
+    setSelectedHandTileIds(new Set())
     setLastDrawnTileId(null)
     setMessage(validation.message)
     window.alert(validation.message)
@@ -404,6 +442,7 @@ export function RummikubGame() {
       hand: [...nextState.playerHand],
     })
     setSelection(null)
+    setSelectedHandTileIds(new Set())
     setLastDrawnTileId(tile?.id ?? null)
     setMessage(
       tile === null
@@ -423,6 +462,7 @@ export function RummikubGame() {
       hand: [...nextState.playerHand],
     })
     setSelection(null)
+    setSelectedHandTileIds(new Set())
     setLastDrawnTileId(null)
     setMessage('新しいゲームを開始しました。')
   }
@@ -451,7 +491,7 @@ export function RummikubGame() {
   }
 
   return (
-    <main className={`app-shell density-${densityMode}`}>
+    <main className="app-shell density-compact">
       <header className="app-header">
         <div>
           <p className="eyebrow">Rummikub style duel</p>
@@ -464,17 +504,15 @@ export function RummikubGame() {
       <CpuHand hand={gameState.cpuHand} revealTiles={gameState.winner !== null} />
       <GameTools
         handSortMode={handSortMode}
-        densityMode={densityMode}
         confirmBeforeEndTurn={confirmBeforeEndTurn}
         onHandSortModeChange={handleHandSortModeChange}
-        onDensityModeChange={setDensityMode}
         onConfirmBeforeEndTurnChange={setConfirmBeforeEndTurn}
       />
       <GameBoard
         board={draft.draftBoard}
         lockedSetIds={lockedSetIds}
         canDropHandTile={canPlayerAct}
-        selectedTileId={selectedTileId}
+        selectedTileId={selectedBoardTileId}
         onDragStartTile={handleDragStartBoardTile}
         onDragEndTile={handleDragEndBoardTile}
         onSelectTile={handleSelectBoardTile}
@@ -496,7 +534,7 @@ export function RummikubGame() {
       />
       <PlayerHand
         hand={sortedDraftHand}
-        selectedTileId={selectedTileId}
+        selectedTileIds={selectedHandTileIds}
         recentlyDrawnTileId={lastDrawnTileId}
         disabled={!canPlayerAct}
         onSelectTile={handleSelectHandTile}
@@ -568,7 +606,23 @@ function getSetIdContainingTile(board: TileSet[], tileId: string): string | null
   return board.find((set) => set.tiles.some((tile) => tile.id === tileId))?.id ?? null
 }
 
-function moveTileToSet(
+function parseDraggedTileIds(value: string): string[] {
+  return value.split('|').filter(Boolean)
+}
+
+function moveTilesToSet(
+  draft: DraftState,
+  tileIds: string[],
+  targetSetId: string,
+  targetTileIndex?: number,
+): DraftState {
+  return tileIds.reduce<DraftState>((currentDraft, tileId, index) => {
+    const insertionIndex = targetTileIndex === undefined ? undefined : targetTileIndex + index
+    return moveSingleTileToSet(currentDraft, tileId, targetSetId, insertionIndex)
+  }, draft)
+}
+
+function moveSingleTileToSet(
   draft: DraftState,
   tileId: string,
   targetSetId: string,
@@ -609,8 +663,8 @@ function moveTileToSet(
   }
 }
 
-function moveTileToNewSet(draft: DraftState, tileId: string): DraftState {
-  const result = takeTileById(draft, tileId)
+function moveTilesToNewSet(draft: DraftState, tileIds: string[]): DraftState {
+  const result = takeTilesByIds(draft, tileIds)
 
   if (!result) {
     return draft
@@ -620,8 +674,50 @@ function moveTileToNewSet(draft: DraftState, tileId: string): DraftState {
     draftHand: result.draftHand,
     draftBoard: [
       ...removeEmptySets(result.draftBoard),
-      getSetWithInferredType({ id: createSetId(), type: 'run', tiles: [result.tile] }),
+      getSetWithInferredType({ id: createSetId(), type: 'run', tiles: result.tiles }),
     ],
+  }
+}
+
+function takeTilesByIds(
+  draft: DraftState,
+  tileIds: string[],
+): (DraftState & { tiles: Tile[] }) | null {
+  const results = tileIds.reduce<{
+    currentDraft: DraftState
+    tiles: Tile[]
+    ok: boolean
+  }>(
+    (state, tileId) => {
+      if (!state.ok) {
+        return state
+      }
+
+      const result = takeTileById(state.currentDraft, tileId)
+
+      if (!result) {
+        return { ...state, ok: false }
+      }
+
+      return {
+        currentDraft: {
+          draftBoard: result.draftBoard,
+          draftHand: result.draftHand,
+        },
+        tiles: [...state.tiles, result.tile],
+        ok: true,
+      }
+    },
+    { currentDraft: draft, tiles: [], ok: true },
+  )
+
+  if (!results.ok || results.tiles.length === 0) {
+    return null
+  }
+
+  return {
+    ...results.currentDraft,
+    tiles: results.tiles,
   }
 }
 

@@ -1,21 +1,16 @@
 type HandSortMode = 'color' | 'number'
-type DensityMode = 'comfortable' | 'compact'
 
 type GameToolsProps = {
   handSortMode: HandSortMode
-  densityMode: DensityMode
   confirmBeforeEndTurn: boolean
   onHandSortModeChange: (mode: HandSortMode) => void
-  onDensityModeChange: (mode: DensityMode) => void
   onConfirmBeforeEndTurnChange: (enabled: boolean) => void
 }
 
 export function GameTools({
   handSortMode,
-  densityMode,
   confirmBeforeEndTurn,
   onHandSortModeChange,
-  onDensityModeChange,
   onConfirmBeforeEndTurnChange,
 }: GameToolsProps) {
   return (
@@ -40,26 +35,6 @@ export function GameTools({
         </div>
       </div>
 
-      <div className="tool-group">
-        <span className="tool-label">表示密度</span>
-        <div className="segmented-control">
-          <button
-            type="button"
-            className={densityMode === 'comfortable' ? 'active' : ''}
-            onClick={() => onDensityModeChange('comfortable')}
-          >
-            標準
-          </button>
-          <button
-            type="button"
-            className={densityMode === 'compact' ? 'active' : ''}
-            onClick={() => onDensityModeChange('compact')}
-          >
-            小
-          </button>
-        </div>
-      </div>
-
       <label className="confirm-toggle">
         <input
           type="checkbox"
@@ -72,4 +47,4 @@ export function GameTools({
   )
 }
 
-export type { DensityMode, HandSortMode }
+export type { HandSortMode }

@@ -4,7 +4,7 @@ import { TileView } from './TileView'
 
 type PlayerHandProps = {
   hand: Tile[]
-  selectedTileId: string | null
+  selectedTileIds: Set<string>
   recentlyDrawnTileId: string | null
   disabled: boolean
   onSelectTile: (tileId: string) => void
@@ -14,7 +14,7 @@ type PlayerHandProps = {
 
 export function PlayerHand({
   hand,
-  selectedTileId,
+  selectedTileIds,
   recentlyDrawnTileId,
   disabled,
   onSelectTile,
@@ -25,7 +25,10 @@ export function PlayerHand({
     <section className="hand-zone" aria-label="player hand">
       <div className="zone-title">
         <h2>プレイヤー手牌</h2>
-        <span>{hand.length}枚</span>
+        <span>
+          {hand.length}枚
+          {selectedTileIds.size > 0 ? ` / 選択 ${selectedTileIds.size}枚` : ''}
+        </span>
       </div>
       <div className="tile-row hand-row">
         {hand.map((tile) => (
@@ -34,7 +37,7 @@ export function PlayerHand({
             tile={tile}
             disabled={disabled}
             draggable={!disabled}
-            isSelected={selectedTileId === tile.id}
+            isSelected={selectedTileIds.has(tile.id)}
             isRecentlyDrawn={recentlyDrawnTileId === tile.id}
             onClick={() => onSelectTile(tile.id)}
             onDragStart={onDragStartTile}
