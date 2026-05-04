@@ -7,9 +7,15 @@ type GameBoardProps = {
   lockedSetIds: Set<string>
   canDropHandTile: boolean
   selectedTileId: string | null
+  onDragStartTile: (
+    setId: string,
+    tileId: string,
+    event: DragEvent<HTMLButtonElement>,
+  ) => void
+  onDragEndTile: () => void
   onSelectTile: (setId: string, tileId: string) => void
-  onDropHandTile: (setId: string, tileId: string) => void
-  onDropHandTileToNewSet: (tileId: string) => void
+  onDropTile: (setId: string, tileId: string, tileIndex?: number) => void
+  onDropTileToNewSet: (tileId: string) => void
 }
 
 export function GameBoard({
@@ -17,9 +23,11 @@ export function GameBoard({
   lockedSetIds,
   canDropHandTile,
   selectedTileId,
+  onDragStartTile,
+  onDragEndTile,
   onSelectTile,
-  onDropHandTile,
-  onDropHandTileToNewSet,
+  onDropTile,
+  onDropTileToNewSet,
 }: GameBoardProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -49,7 +57,7 @@ export function GameBoard({
 
     const tileId = event.dataTransfer.getData('application/x-rummikub-tile-id')
     if (tileId) {
-      onDropHandTileToNewSet(tileId)
+      onDropTileToNewSet(tileId)
     }
   }
 
@@ -77,8 +85,10 @@ export function GameBoard({
               isLocked={lockedSetIds.has(set.id)}
               canDropHandTile={canDropHandTile}
               selectedTileId={selectedTileId}
+              onDragStartTile={onDragStartTile}
+              onDragEndTile={onDragEndTile}
               onSelectTile={onSelectTile}
-              onDropHandTile={onDropHandTile}
+              onDropTile={onDropTile}
             />
           ))}
         </div>

@@ -11,6 +11,8 @@ type TileViewProps = {
   onClick?: () => void
   onDragStart?: (tileId: string, event: DragEvent<HTMLButtonElement>) => void
   onDragEnd?: () => void
+  onDragOver?: (event: DragEvent<HTMLButtonElement>) => void
+  onDrop?: (event: DragEvent<HTMLButtonElement>) => void
 }
 
 export function TileView({
@@ -23,6 +25,8 @@ export function TileView({
   onClick,
   onDragStart,
   onDragEnd,
+  onDragOver,
+  onDrop,
 }: TileViewProps) {
   const label = isHidden ? '' : tile.color === 'joker' ? 'J' : tile.number
   const ariaLabel = isHidden
@@ -50,6 +54,8 @@ export function TileView({
       onClick={onClick}
       onDragStart={(event) => onDragStart?.(tile.id, event)}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       <span>{label}</span>
     </button>

@@ -247,6 +247,10 @@
   background: #fff9ef;
 }
 
+.tile-set.unconfirmed.drag-over {
+  background: #fff3d9;
+}
+
 .board-zone.drag-over,
 .tile-set.drag-over {
   border-color: #2f80ed;
@@ -310,6 +314,13 @@
 .notice {
   color: #778697;
   font-size: 14px;
+}
+
+.invalid-reason {
+  margin: 8px 0 0;
+  color: #8a5714;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .tile-set-actions {

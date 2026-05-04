@@ -16,6 +16,7 @@ import {
   drawTile,
   inferSetType,
   sortHand,
+  sortTilesForSet,
   validatePlayerTurn,
 } from './logics/gameLogic'
 import type {
@@ -173,6 +174,24 @@ export function RummikubGame() {
     setSelection((current) => (current?.source === 'hand' ? null : current))
   }
 
+  function handleDragStartBoardTile(
+    setId: string,
+    tileId: string,
+    event: DragEvent<HTMLButtonElement>,
+  ): void {
+    if (!canPlayerAct || lockedSetIds.has(setId)) {
+      return
+    }
+
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(TILE_DRAG_MIME_TYPE, tileId)
+    setSelection({ source: 'board', setId, tileId })
+  }
+
+  function handleDragEndBoardTile(): void {
+    setSelection((current) => (current?.source === 'board' ? null : current))
+  }
+
   function handleSelectBoardTile(setId: string, tileId: string): void {
     if (!canPlayerAct || lockedSetIds.has(setId)) {
       setMessage('初回30点を出す前は、既存の場のタイルを選択できません。')
@@ -186,7 +205,11 @@ export function RummikubGame() {
     )
   }
 
-  function handleDropHandTileToSet(setId: string, tileId: string): void {
+  function handleDropTileToSet(
+    setId: string,
+    tileId: string,
+    tileIndex?: number,
+  ): void {
     if (!canPlayerAct) {
       return
     }
@@ -196,49 +219,28 @@ export function RummikubGame() {
       return
     }
 
-    setDraft((currentDraft) => {
-      const tile = currentDraft.draftHand.find((handTile) => handTile.id === tileId)
+    const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
+    if (sourceSetId && lockedSetIds.has(sourceSetId)) {
+      setMessage('初回30点を出す前は、既存の場のタイルを移動できません。')
+      return
+    }
 
-      if (!tile) {
-        return currentDraft
-      }
-
-      return {
-        draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
-        draftBoard: removeEmptySets(
-          currentDraft.draftBoard.map((set) => {
-            if (set.id !== setId) {
-              return set
-            }
-
-            return getSetWithInferredType({ ...set, tiles: [...set.tiles, tile] })
-          }),
-        ),
-      }
-    })
+    setDraft((currentDraft) => moveTileToSet(currentDraft, tileId, setId, tileIndex))
     setSelection(null)
   }
 
-  function handleDropHandTileToNewSet(tileId: string): void {
+  function handleDropTileToNewSet(tileId: string): void {
     if (!canPlayerAct) {
       return
     }
 
-    setDraft((currentDraft) => {
-      const tile = currentDraft.draftHand.find((handTile) => handTile.id === tileId)
+    const sourceSetId = getSetIdContainingTile(draft.draftBoard, tileId)
+    if (sourceSetId && lockedSetIds.has(sourceSetId)) {
+      setMessage('初回30点を出す前は、既存の場のタイルを移動できません。')
+      return
+    }
 
-      if (!tile) {
-        return currentDraft
-      }
-
-      return {
-        draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
-        draftBoard: [
-          ...removeEmptySets(currentDraft.draftBoard),
-          getSetWithInferredType({ id: createSetId(), type: 'run', tiles: [tile] }),
-        ],
-      }
-    })
+    setDraft((currentDraft) => moveTileToNewSet(currentDraft, tileId))
     setSelection(null)
   }
 
@@ -386,9 +388,11 @@ export function RummikubGame() {
         lockedSetIds={lockedSetIds}
         canDropHandTile={canPlayerAct}
         selectedTileId={selectedTileId}
+        onDragStartTile={handleDragStartBoardTile}
+        onDragEndTile={handleDragEndBoardTile}
         onSelectTile={handleSelectBoardTile}
-        onDropHandTile={handleDropHandTileToSet}
-        onDropHandTileToNewSet={handleDropHandTileToNewSet}
+        onDropTile={handleDropTileToSet}
+        onDropTileToNewSet={handleDropTileToNewSet}
       />
       <Controls
         canAct={canPlayerAct}
@@ -459,11 +463,128 @@ function removeEmptySets(board: TileSet[]): TileSet[] {
   return board.filter((set) => set.tiles.length > 0)
 }
 
-function getSetWithInferredType(set: TileSet): TileSet {
+function getSetIdContainingTile(board: TileSet[], tileId: string): string | null {
+  return board.find((set) => set.tiles.some((tile) => tile.id === tileId))?.id ?? null
+}
+
+function moveTileToSet(
+  draft: DraftState,
+  tileId: string,
+  targetSetId: string,
+  targetTileIndex?: number,
+): DraftState {
+  const result = takeTileById(draft, tileId)
+
+  if (!result) {
+    return draft
+  }
+
+  const adjustedIndex =
+    result.source?.setId === targetSetId &&
+    targetTileIndex !== undefined &&
+    result.source.tileIndex < targetTileIndex
+      ? targetTileIndex - 1
+      : targetTileIndex
+  let didInsert = false
+  const draftBoard = result.draftBoard.map((set) => {
+    if (set.id !== targetSetId) {
+      return set
+    }
+
+    didInsert = true
+    return getSetWithInferredType({
+      ...set,
+      tiles: insertTileAt(set.tiles, result.tile, adjustedIndex),
+    })
+  })
+
+  if (!didInsert) {
+    return draft
+  }
+
   return {
+    draftHand: result.draftHand,
+    draftBoard: removeEmptySets(draftBoard),
+  }
+}
+
+function moveTileToNewSet(draft: DraftState, tileId: string): DraftState {
+  const result = takeTileById(draft, tileId)
+
+  if (!result) {
+    return draft
+  }
+
+  return {
+    draftHand: result.draftHand,
+    draftBoard: [
+      ...removeEmptySets(result.draftBoard),
+      getSetWithInferredType({ id: createSetId(), type: 'run', tiles: [result.tile] }),
+    ],
+  }
+}
+
+function takeTileById(
+  draft: DraftState,
+  tileId: string,
+): (DraftState & { tile: Tile; source: { setId: string; tileIndex: number } | null }) | null {
+  const handTile = draft.draftHand.find((tile) => tile.id === tileId)
+
+  if (handTile) {
+    return {
+      tile: handTile,
+      source: null,
+      draftHand: draft.draftHand.filter((tile) => tile.id !== tileId),
+      draftBoard: cloneBoard(draft.draftBoard),
+    }
+  }
+
+  let movedTile: Tile | null = null
+  let source: { setId: string; tileIndex: number } | null = null
+  const draftBoard = draft.draftBoard.map((set) => {
+    const tileIndex = set.tiles.findIndex((tile) => tile.id === tileId)
+
+    if (tileIndex === -1) {
+      return { ...set, tiles: [...set.tiles] }
+    }
+
+    movedTile = set.tiles[tileIndex]
+    source = { setId: set.id, tileIndex }
+    return getSetWithInferredType({
+      ...set,
+      tiles: set.tiles.filter((tile) => tile.id !== tileId),
+    })
+  })
+
+  if (!movedTile || !source) {
+    return null
+  }
+
+  return {
+    tile: movedTile,
+    source,
+    draftHand: [...draft.draftHand],
+    draftBoard,
+  }
+}
+
+function insertTileAt(tiles: Tile[], tile: Tile, index?: number): Tile[] {
+  if (index === undefined) {
+    return [...tiles, tile]
+  }
+
+  const nextTiles = [...tiles]
+  nextTiles.splice(Math.max(0, Math.min(index, nextTiles.length)), 0, tile)
+  return nextTiles
+}
+
+function getSetWithInferredType(set: TileSet): TileSet {
+  const nextSet = {
     ...set,
     type: inferSetType(set.tiles) ?? set.type,
   }
+
+  return sortTilesForSet(nextSet)
 }
 
 function getTurnChangeStatus(

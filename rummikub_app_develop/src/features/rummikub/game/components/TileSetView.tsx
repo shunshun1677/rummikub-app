@@ -1,6 +1,6 @@
 import { useState, type DragEvent } from 'react'
 import type { TileSet } from '../../_shared/types/types'
-import { inferSetType } from '../logics/gameLogic'
+import { getInvalidSetReason, inferSetType } from '../logics/gameLogic'
 import { TileView } from './TileView'
 
 type TileSetViewProps = {
@@ -8,8 +8,14 @@ type TileSetViewProps = {
   isLocked: boolean
   selectedTileId: string | null
   canDropHandTile: boolean
+  onDragStartTile: (
+    setId: string,
+    tileId: string,
+    event: DragEvent<HTMLButtonElement>,
+  ) => void
+  onDragEndTile: () => void
   onSelectTile: (setId: string, tileId: string) => void
-  onDropHandTile: (setId: string, tileId: string) => void
+  onDropTile: (setId: string, tileId: string, tileIndex?: number) => void
 }
 
 export function TileSetView({
@@ -17,13 +23,16 @@ export function TileSetView({
   isLocked,
   selectedTileId,
   canDropHandTile,
+  onDragStartTile,
+  onDragEndTile,
   onSelectTile,
-  onDropHandTile,
+  onDropTile,
 }: TileSetViewProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const inferredType = inferSetType(set.tiles)
   const setTypeLabel = inferredType ?? '未確定'
   const isUnconfirmed = set.tiles.length > 0 && inferredType === null
+  const invalidReason = getInvalidSetReason(set.tiles)
 
   function handleDragOver(event: DragEvent<HTMLElement>): void {
     if (isLocked || !canDropHandTile) {
@@ -52,7 +61,34 @@ export function TileSetView({
 
     const tileId = event.dataTransfer.getData('application/x-rummikub-tile-id')
     if (tileId) {
-      onDropHandTile(set.id, tileId)
+      onDropTile(set.id, tileId)
+    }
+  }
+
+  function handleTileDragOver(event: DragEvent<HTMLButtonElement>): void {
+    if (isLocked || !canDropHandTile) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleTileDrop(
+    tileIndex: number,
+    event: DragEvent<HTMLButtonElement>,
+  ): void {
+    if (isLocked || !canDropHandTile) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDragOver(false)
+
+    const tileId = event.dataTransfer.getData('application/x-rummikub-tile-id')
+    if (tileId) {
+      onDropTile(set.id, tileId, tileIndex)
     }
   }
 
@@ -76,17 +112,23 @@ export function TileSetView({
         {set.tiles.length === 0 ? (
           <span className="empty-set">空のセット</span>
         ) : (
-          set.tiles.map((tile) => (
+          set.tiles.map((tile, index) => (
             <TileView
               key={tile.id}
               tile={tile}
               disabled={isLocked}
+              draggable={!isLocked && canDropHandTile}
               isSelected={selectedTileId === tile.id}
               onClick={() => onSelectTile(set.id, tile.id)}
+              onDragStart={(tileId, event) => onDragStartTile(set.id, tileId, event)}
+              onDragEnd={onDragEndTile}
+              onDragOver={handleTileDragOver}
+              onDrop={(event) => handleTileDrop(index, event)}
             />
           ))
         )}
       </div>
+      {invalidReason ? <p className="invalid-reason">{invalidReason}</p> : null}
     </section>
   )
 }

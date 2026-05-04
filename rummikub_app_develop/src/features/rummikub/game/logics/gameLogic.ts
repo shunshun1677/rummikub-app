@@ -106,6 +106,60 @@ export function inferSetType(tiles: Tile[]): TileSet['type'] | null {
   return null
 }
 
+export function getInvalidSetReason(tiles: Tile[]): string | null {
+  if (inferSetType(tiles)) {
+    return null
+  }
+
+  if (tiles.length === 0) {
+    return null
+  }
+
+  if (tiles.length < 3) {
+    return '3枚以上必要です。'
+  }
+
+  if (tiles.length > 13) {
+    return 'runは13枚までです。'
+  }
+
+  const normalTiles = tiles.filter(isNormalTile)
+  const normalNumbers = normalTiles.map((tile) => tile.number)
+  const uniqueNumbers = new Set(normalNumbers)
+  const normalColors = normalTiles.map((tile) => tile.color)
+  const uniqueColors = new Set(normalColors)
+
+  if (uniqueNumbers.size === 1 && normalColors.length !== uniqueColors.size) {
+    return 'groupは同じ数字で色違いにしてください。'
+  }
+
+  if (uniqueNumbers.size === 1 && tiles.length > 4) {
+    return 'groupは4枚までです。'
+  }
+
+  if (uniqueColors.size === 1 && normalNumbers.length !== uniqueNumbers.size) {
+    return 'runは同じ数字を重複できません。'
+  }
+
+  if (uniqueColors.size === 1) {
+    return 'runは同じ色の連番にしてください。'
+  }
+
+  return 'runまたはgroupとして成立していません。'
+}
+
+export function sortTilesForSet(set: TileSet): TileSet {
+  if (set.type === 'run' && isValidRun(set.tiles)) {
+    return { ...set, tiles: sortRunTiles(set.tiles) }
+  }
+
+  if (set.type === 'group' && isValidGroup(set.tiles)) {
+    return { ...set, tiles: sortGroupTiles(set.tiles) }
+  }
+
+  return set
+}
+
 export function validateBoard(board: TileSet[]): boolean {
   const tileIds = board.flatMap((set) => set.tiles.map((tile) => tile.id))
   const uniqueIds = new Set(tileIds)
@@ -262,6 +316,52 @@ function getBestRunValues(tiles: Tile[]): number[] {
   }
 
   return Array.from({ length: tiles.length }, (_, index) => start + index)
+}
+
+function sortRunTiles(tiles: Tile[]): Tile[] {
+  const starts = getPossibleRunStarts(tiles)
+  const start = starts.at(-1)
+
+  if (start === undefined) {
+    return tiles
+  }
+
+  const usedTileIds = new Set<string>()
+
+  return Array.from({ length: tiles.length }, (_, index) => {
+    const number = start + index
+    const normalTile = tiles.find(
+      (tile) => !usedTileIds.has(tile.id) && tile.number === number,
+    )
+
+    if (normalTile) {
+      usedTileIds.add(normalTile.id)
+      return normalTile
+    }
+
+    const joker = tiles.find(
+      (tile) => !usedTileIds.has(tile.id) && tile.color === 'joker',
+    )
+
+    if (!joker) {
+      return tiles[index]
+    }
+
+    usedTileIds.add(joker.id)
+    return joker
+  })
+}
+
+function sortGroupTiles(tiles: Tile[]): Tile[] {
+  const colorRank: Record<Tile['color'], number> = {
+    red: 0,
+    blue: 1,
+    yellow: 2,
+    black: 3,
+    joker: 4,
+  }
+
+  return [...tiles].sort((a, b) => colorRank[a.color] - colorRank[b.color])
 }
 
 function getPossibleRunStarts(tiles: Tile[]): number[] {
