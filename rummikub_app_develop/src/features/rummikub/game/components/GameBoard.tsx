@@ -1,33 +1,25 @@
 import { useState, type DragEvent } from 'react'
-import type { SetType, TileSet } from '../../_shared/types/types'
+import type { TileSet } from '../../_shared/types/types'
 import { TileSetView } from './TileSetView'
 
 type GameBoardProps = {
   board: TileSet[]
   lockedSetIds: Set<string>
-  canAddSelected: boolean
   canDropHandTile: boolean
   selectedTileId: string | null
-  onAddSelected: (setId: string) => void
   onSelectTile: (setId: string, tileId: string) => void
   onDropHandTile: (setId: string, tileId: string) => void
   onDropHandTileToNewSet: (tileId: string) => void
-  onChangeType: (setId: string, type: SetType) => void
-  onRemoveEmptySet: (setId: string) => void
 }
 
 export function GameBoard({
   board,
   lockedSetIds,
-  canAddSelected,
   canDropHandTile,
   selectedTileId,
-  onAddSelected,
   onSelectTile,
   onDropHandTile,
   onDropHandTileToNewSet,
-  onChangeType,
-  onRemoveEmptySet,
 }: GameBoardProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -83,14 +75,10 @@ export function GameBoard({
               key={set.id}
               set={set}
               isLocked={lockedSetIds.has(set.id)}
-              canAddSelected={canAddSelected}
               canDropHandTile={canDropHandTile}
               selectedTileId={selectedTileId}
-              onAddSelected={onAddSelected}
               onSelectTile={onSelectTile}
               onDropHandTile={onDropHandTile}
-              onChangeType={onChangeType}
-              onRemoveEmptySet={onRemoveEmptySet}
             />
           ))}
         </div>

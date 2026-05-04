@@ -1,13 +1,7 @@
-import type { SetType } from '../../_shared/types/types'
-
 type ControlsProps = {
-  selectedLabel: string
-  newSetType: SetType
   canAct: boolean
   canDrawAndEndTurn: boolean
   hasBoardSelection: boolean
-  onNewSetTypeChange: (type: SetType) => void
-  onCreateSet: () => void
   onReturnSelectedToHand: () => void
   onResetDraft: () => void
   onEndTurn: () => void
@@ -16,13 +10,9 @@ type ControlsProps = {
 }
 
 export function Controls({
-  selectedLabel,
-  newSetType,
   canAct,
   canDrawAndEndTurn,
   hasBoardSelection,
-  onNewSetTypeChange,
-  onCreateSet,
   onReturnSelectedToHand,
   onResetDraft,
   onEndTurn,
@@ -31,27 +21,7 @@ export function Controls({
 }: ControlsProps) {
   return (
     <section className="controls" aria-label="controls">
-      <div className="selection-panel">
-        <span>選択中</span>
-        <strong>{selectedLabel}</strong>
-      </div>
-
-      <label className="type-picker">
-        新規セット
-        <select
-          value={newSetType}
-          disabled={!canAct}
-          onChange={(event) => onNewSetTypeChange(event.target.value as SetType)}
-        >
-          <option value="run">run</option>
-          <option value="group">group</option>
-        </select>
-      </label>
-
       <div className="control-buttons">
-        <button type="button" disabled={!canAct} onClick={onCreateSet}>
-          新しいセット
-        </button>
         <button
           type="button"
           disabled={!canAct || !hasBoardSelection}

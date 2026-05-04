@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import './styles/game.css'
 import { Controls } from './components/Controls'
 import { CpuHand } from './components/CpuHand'
+import { GameResultDetails } from './components/GameResultDetails'
 import { GameBoard } from './components/GameBoard'
 import { PlayerHand } from './components/PlayerHand'
 import { StatusBar } from './components/StatusBar'
@@ -13,13 +14,13 @@ import {
   createSetId,
   determineWinnerByHandPoints,
   drawTile,
+  inferSetType,
   sortHand,
   validatePlayerTurn,
 } from './logics/gameLogic'
 import type {
   DraftState,
   GameState,
-  SetType,
   Tile,
   TileSet,
 } from '../_shared/types/types'
@@ -57,9 +58,8 @@ export function RummikubGame() {
     hand: [...initialState.playerHand],
   }))
   const [selection, setSelection] = useState<TileSelection | null>(null)
-  const [newSetType, setNewSetType] = useState<SetType>('run')
   const [lastDrawnTileId, setLastDrawnTileId] = useState<string | null>(null)
-  const [message, setMessage] = useState('手牌を選択して、新しいセットか場のセットに追加してください。')
+  const [message, setMessage] = useState('牌をドラッグして場に置いてください。')
 
   const isCpuThinking = gameState.currentTurn === 'cpu' && !gameState.winner
   const canPlayerAct = gameState.currentTurn === 'player' && !gameState.winner && !isCpuThinking
@@ -75,10 +75,6 @@ export function RummikubGame() {
     return originalSetIds
   }, [gameState.hasPlayerOpened, originalSetIds])
   const selectedTileId = selection?.tileId ?? null
-  const selectedLabel = useMemo(
-    () => getSelectedLabel(selection, draft),
-    [draft, selection],
-  )
   const hasBoardSelection = selection?.source === 'board'
   const turnChangeStatus = useMemo(
     () => getTurnChangeStatus(draft, turnSnapshot),
@@ -190,68 +186,6 @@ export function RummikubGame() {
     )
   }
 
-  function handleCreateSet(): void {
-    if (!canPlayerAct) {
-      return
-    }
-
-    setDraft((currentDraft) => {
-      if (!selection) {
-        return {
-          ...currentDraft,
-          draftBoard: [
-            ...currentDraft.draftBoard,
-            { id: createSetId(), type: newSetType, tiles: [] },
-          ],
-        }
-      }
-
-      const result = takeSelectedTile(currentDraft, selection)
-
-      if (!result) {
-        return currentDraft
-      }
-
-      return {
-        draftHand: result.draftHand,
-        draftBoard: [
-          ...removeEmptySets(result.draftBoard),
-          { id: createSetId(), type: newSetType, tiles: [result.tile] },
-        ],
-      }
-    })
-    setSelection(null)
-  }
-
-  function handleAddSelectedToSet(setId: string): void {
-    if (!canPlayerAct || !selection) {
-      return
-    }
-
-    if (lockedSetIds.has(setId)) {
-      setMessage('初回30点を出す前は、既存の場へ追加できません。')
-      return
-    }
-
-    setDraft((currentDraft) => {
-      const result = takeSelectedTile(currentDraft, selection)
-
-      if (!result) {
-        return currentDraft
-      }
-
-      return {
-        draftHand: result.draftHand,
-        draftBoard: removeEmptySets(
-          result.draftBoard.map((set) =>
-            set.id === setId ? { ...set, tiles: [...set.tiles, result.tile] } : set,
-          ),
-        ),
-      }
-    })
-    setSelection(null)
-  }
-
   function handleDropHandTileToSet(setId: string, tileId: string): void {
     if (!canPlayerAct) {
       return
@@ -272,9 +206,13 @@ export function RummikubGame() {
       return {
         draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
         draftBoard: removeEmptySets(
-          currentDraft.draftBoard.map((set) =>
-            set.id === setId ? { ...set, tiles: [...set.tiles, tile] } : set,
-          ),
+          currentDraft.draftBoard.map((set) => {
+            if (set.id !== setId) {
+              return set
+            }
+
+            return getSetWithInferredType({ ...set, tiles: [...set.tiles, tile] })
+          }),
         ),
       }
     })
@@ -297,7 +235,7 @@ export function RummikubGame() {
         draftHand: currentDraft.draftHand.filter((handTile) => handTile.id !== tileId),
         draftBoard: [
           ...removeEmptySets(currentDraft.draftBoard),
-          { id: createSetId(), type: newSetType, tiles: [tile] },
+          getSetWithInferredType({ id: createSetId(), type: 'run', tiles: [tile] }),
         ],
       }
     })
@@ -327,35 +265,6 @@ export function RummikubGame() {
       }
     })
     setSelection(null)
-  }
-
-  function handleChangeSetType(setId: string, type: SetType): void {
-    if (!canPlayerAct || lockedSetIds.has(setId)) {
-      return
-    }
-
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      draftBoard: currentDraft.draftBoard.map((set) =>
-        set.id === setId ? { ...set, type } : set,
-      ),
-    }))
-  }
-
-  function handleRemoveEmptySet(setId: string): void {
-    if (!canPlayerAct || lockedSetIds.has(setId)) {
-      return
-    }
-
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      draftBoard: currentDraft.draftBoard.filter(
-        (set) => set.id !== setId || set.tiles.length > 0,
-      ),
-    }))
-    setSelection((current) =>
-      current?.source === 'board' && current.setId === setId ? null : current,
-    )
   }
 
   function handleResetDraft(): void {
@@ -470,28 +379,21 @@ export function RummikubGame() {
       </header>
 
       <StatusBar state={gameState} message={message} isCpuThinking={isCpuThinking} />
-      <CpuHand tileCount={gameState.cpuHand.length} />
+      <GameResultDetails state={gameState} />
+      <CpuHand hand={gameState.cpuHand} revealTiles={gameState.winner !== null} />
       <GameBoard
         board={draft.draftBoard}
         lockedSetIds={lockedSetIds}
-        canAddSelected={canPlayerAct && selection !== null}
         canDropHandTile={canPlayerAct}
         selectedTileId={selectedTileId}
-        onAddSelected={handleAddSelectedToSet}
         onSelectTile={handleSelectBoardTile}
         onDropHandTile={handleDropHandTileToSet}
         onDropHandTileToNewSet={handleDropHandTileToNewSet}
-        onChangeType={handleChangeSetType}
-        onRemoveEmptySet={handleRemoveEmptySet}
       />
       <Controls
-        selectedLabel={selectedLabel}
-        newSetType={newSetType}
         canAct={canPlayerAct}
         canDrawAndEndTurn={canDrawAndEndTurn}
         hasBoardSelection={hasBoardSelection}
-        onNewSetTypeChange={setNewSetType}
-        onCreateSet={handleCreateSet}
         onReturnSelectedToHand={handleReturnSelectedToHand}
         onResetDraft={handleResetDraft}
         onEndTurn={handleEndTurn}
@@ -536,10 +438,10 @@ function takeSelectedTile(
     }
 
     movedTile = set.tiles.find((tile) => tile.id === selection.tileId) ?? null
-    return {
+    return getSetWithInferredType({
       ...set,
       tiles: set.tiles.filter((tile) => tile.id !== selection.tileId),
-    }
+    })
   })
 
   if (!movedTile) {
@@ -555,6 +457,13 @@ function takeSelectedTile(
 
 function removeEmptySets(board: TileSet[]): TileSet[] {
   return board.filter((set) => set.tiles.length > 0)
+}
+
+function getSetWithInferredType(set: TileSet): TileSet {
+  return {
+    ...set,
+    type: inferSetType(set.tiles) ?? set.type,
+  }
 }
 
 function getTurnChangeStatus(
@@ -582,26 +491,6 @@ function getHandSignature(hand: Tile[]): string {
     .map((tile) => tile.id)
     .sort()
     .join('|')
-}
-
-function getSelectedLabel(selection: TileSelection | null, draft: DraftState): string {
-  if (!selection) {
-    return 'なし'
-  }
-
-  const tile =
-    selection.source === 'hand'
-      ? draft.draftHand.find((handTile) => handTile.id === selection.tileId)
-      : draft.draftBoard
-          .flatMap((set) => set.tiles)
-          .find((boardTile) => boardTile.id === selection.tileId)
-
-  if (!tile) {
-    return 'なし'
-  }
-
-  const label = tile.color === 'joker' ? 'Joker' : `${tile.color} ${tile.number}`
-  return selection.source === 'hand' ? `手札: ${label}` : `場: ${label}`
 }
 
 export default RummikubGame

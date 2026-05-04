@@ -94,6 +94,18 @@ export function isValidSet(set: TileSet): boolean {
   return set.type === 'run' ? isValidRun(set.tiles) : isValidGroup(set.tiles)
 }
 
+export function inferSetType(tiles: Tile[]): TileSet['type'] | null {
+  if (isValidRun(tiles)) {
+    return 'run'
+  }
+
+  if (isValidGroup(tiles)) {
+    return 'group'
+  }
+
+  return null
+}
+
 export function validateBoard(board: TileSet[]): boolean {
   const tileIds = board.flatMap((set) => set.tiles.map((tile) => tile.id))
   const uniqueIds = new Set(tileIds)
