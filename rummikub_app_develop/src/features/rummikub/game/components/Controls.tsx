@@ -1,7 +1,10 @@
 type ControlsProps = {
   canAct: boolean
+  canEndTurn: boolean
   canDrawAndEndTurn: boolean
+  canUndo: boolean
   hasBoardSelection: boolean
+  onUndo: () => void
   onReturnSelectedToHand: () => void
   onResetDraft: () => void
   onEndTurn: () => void
@@ -11,8 +14,11 @@ type ControlsProps = {
 
 export function Controls({
   canAct,
+  canEndTurn,
   canDrawAndEndTurn,
+  canUndo,
   hasBoardSelection,
+  onUndo,
   onReturnSelectedToHand,
   onResetDraft,
   onEndTurn,
@@ -22,6 +28,9 @@ export function Controls({
   return (
     <section className="controls" aria-label="controls">
       <div className="control-buttons">
+        <button type="button" disabled={!canAct || !canUndo} onClick={onUndo}>
+          1手戻す
+        </button>
         <button
           type="button"
           disabled={!canAct || !hasBoardSelection}
@@ -32,7 +41,16 @@ export function Controls({
         <button type="button" disabled={!canAct} onClick={onResetDraft}>
           元に戻す
         </button>
-        <button type="button" disabled={!canAct} onClick={onEndTurn}>
+        <button
+          type="button"
+          disabled={!canEndTurn}
+          title={
+            canAct && !canEndTurn
+              ? '場に出した牌や盤面変更がある時だけターン終了できます。'
+              : undefined
+          }
+          onClick={onEndTurn}
+        >
           ターン終了
         </button>
         <button

@@ -86,6 +86,25 @@ export function sortHand(hand: Tile[]): Tile[] {
   })
 }
 
+export function sortHandByNumber(hand: Tile[]): Tile[] {
+  const colorRank: Record<Tile['color'], number> = {
+    red: 0,
+    blue: 1,
+    yellow: 2,
+    black: 3,
+    joker: 4,
+  }
+
+  return [...hand].sort((a, b) => {
+    const numberDiff = (a.number ?? 99) - (b.number ?? 99)
+    if (numberDiff !== 0) {
+      return numberDiff
+    }
+
+    return colorRank[a.color] - colorRank[b.color]
+  })
+}
+
 export function isValidSet(set: TileSet): boolean {
   if (set.tiles.length === 0) {
     return false

@@ -4,6 +4,11 @@ import { Controls } from './components/Controls'
 import { CpuHand } from './components/CpuHand'
 import { GameResultDetails } from './components/GameResultDetails'
 import { GameBoard } from './components/GameBoard'
+import {
+  GameTools,
+  type DensityMode,
+  type HandSortMode,
+} from './components/GameTools'
 import { PlayerHand } from './components/PlayerHand'
 import { StatusBar } from './components/StatusBar'
 import { getCpuMove } from './logics/cpu'
@@ -16,6 +21,7 @@ import {
   drawTile,
   inferSetType,
   sortHand,
+  sortHandByNumber,
   sortTilesForSet,
   validatePlayerTurn,
 } from './logics/gameLogic'
@@ -48,18 +54,24 @@ type TurnChangeStatus = {
   hasAnyChanges: boolean
 }
 
+type DraftSnapshot = DraftState
+
 const initialState = createInitialGameState()
 const TILE_DRAG_MIME_TYPE = 'application/x-rummikub-tile-id'
 
 export function RummikubGame() {
   const [gameState, setGameState] = useState<GameState>(initialState)
   const [draft, setDraft] = useState<DraftState>(() => createDraftFromState(initialState))
+  const [draftHistory, setDraftHistory] = useState<DraftSnapshot[]>([])
   const [turnSnapshot, setTurnSnapshot] = useState<TurnSnapshot>(() => ({
     board: cloneBoard(initialState.board),
     hand: [...initialState.playerHand],
   }))
   const [selection, setSelection] = useState<TileSelection | null>(null)
   const [lastDrawnTileId, setLastDrawnTileId] = useState<string | null>(null)
+  const [handSortMode, setHandSortMode] = useState<HandSortMode>('color')
+  const [densityMode, setDensityMode] = useState<DensityMode>('comfortable')
+  const [confirmBeforeEndTurn, setConfirmBeforeEndTurn] = useState(true)
   const [message, setMessage] = useState('牌をドラッグして場に置いてください。')
 
   const isCpuThinking = gameState.currentTurn === 'cpu' && !gameState.winner
@@ -82,6 +94,11 @@ export function RummikubGame() {
     [draft, turnSnapshot],
   )
   const canDrawAndEndTurn = canPlayerAct && !turnChangeStatus.hasAnyChanges
+  const canEndTurn = canPlayerAct && turnChangeStatus.hasAnyChanges
+  const sortedDraftHand = useMemo(
+    () => sortPlayerHand(draft.draftHand, handSortMode),
+    [draft.draftHand, handSortMode],
+  )
 
   useEffect(() => {
     if (gameState.currentTurn !== 'cpu' || gameState.winner) {
@@ -132,6 +149,7 @@ export function RummikubGame() {
 
       if (nextState.currentTurn === 'player') {
         setDraft(createDraftFromState(nextState))
+        setDraftHistory([])
         setTurnSnapshot({
           board: cloneBoard(nextState.board),
           hand: [...nextState.playerHand],
@@ -225,7 +243,9 @@ export function RummikubGame() {
       return
     }
 
-    setDraft((currentDraft) => moveTileToSet(currentDraft, tileId, setId, tileIndex))
+    updateDraftWithHistory((currentDraft) =>
+      moveTileToSet(currentDraft, tileId, setId, tileIndex),
+    )
     setSelection(null)
   }
 
@@ -240,7 +260,7 @@ export function RummikubGame() {
       return
     }
 
-    setDraft((currentDraft) => moveTileToNewSet(currentDraft, tileId))
+    updateDraftWithHistory((currentDraft) => moveTileToNewSet(currentDraft, tileId))
     setSelection(null)
   }
 
@@ -254,7 +274,7 @@ export function RummikubGame() {
       return
     }
 
-    setDraft((currentDraft) => {
+    updateDraftWithHistory((currentDraft) => {
       const result = takeSelectedTile(currentDraft, selection)
 
       if (!result) {
@@ -263,10 +283,27 @@ export function RummikubGame() {
 
       return {
         draftBoard: removeEmptySets(result.draftBoard),
-        draftHand: sortHand([...result.draftHand, result.tile]),
+        draftHand: sortPlayerHand([...result.draftHand, result.tile], handSortMode),
       }
     })
     setSelection(null)
+  }
+
+  function handleUndoDraft(): void {
+    if (!canPlayerAct || draftHistory.length === 0) {
+      return
+    }
+
+    const previousDraft = draftHistory.at(-1)
+
+    if (!previousDraft) {
+      return
+    }
+
+    setDraft(cloneDraft(previousDraft))
+    setDraftHistory((current) => current.slice(0, -1))
+    setSelection(null)
+    setMessage('直前の操作を戻しました。')
   }
 
   function handleResetDraft(): void {
@@ -278,12 +315,18 @@ export function RummikubGame() {
       draftBoard: cloneBoard(turnSnapshot.board),
       draftHand: [...turnSnapshot.hand],
     })
+    setDraftHistory([])
     setSelection(null)
     setMessage('このターン開始時点へ戻しました。')
   }
 
   function handleEndTurn(): void {
     if (!canPlayerAct) {
+      return
+    }
+
+    if (!turnChangeStatus.hasAnyChanges) {
+      setMessage('牌を場に出した場合だけターン終了できます。出せない場合は1枚引いて終了してください。')
       return
     }
 
@@ -300,7 +343,15 @@ export function RummikubGame() {
       return
     }
 
-    const nextPlayerHand = sortHand(draft.draftHand)
+    if (
+      confirmBeforeEndTurn &&
+      turnChangeStatus.hasAnyChanges &&
+      !window.confirm('このターンの変更を確定してターン終了します。よろしいですか？')
+    ) {
+      return
+    }
+
+    const nextPlayerHand = sortPlayerHand(draft.draftHand, handSortMode)
     const winner = nextPlayerHand.length === 0 ? 'player' : null
 
     setGameState((current) => ({
@@ -311,6 +362,7 @@ export function RummikubGame() {
       currentTurn: winner ? 'player' : 'cpu',
       winner,
     }))
+    setDraftHistory([])
     setSelection(null)
     setLastDrawnTileId(null)
     setMessage(validation.message)
@@ -328,7 +380,9 @@ export function RummikubGame() {
     }
 
     const { tile, newDeck } = drawTile(gameState.deck)
-    const nextPlayerHand = tile ? sortHand([...gameState.playerHand, tile]) : gameState.playerHand
+    const nextPlayerHand = tile
+      ? sortPlayerHand([...gameState.playerHand, tile], handSortMode)
+      : gameState.playerHand
     const winner =
       tile === null || newDeck.length === 0
         ? determineWinnerByHandPoints(nextPlayerHand, gameState.cpuHand)
@@ -344,6 +398,7 @@ export function RummikubGame() {
 
     setGameState(nextState)
     setDraft(createDraftFromState(nextState))
+    setDraftHistory([])
     setTurnSnapshot({
       board: cloneBoard(nextState.board),
       hand: [...nextState.playerHand],
@@ -362,6 +417,7 @@ export function RummikubGame() {
 
     setGameState(nextState)
     setDraft(createDraftFromState(nextState))
+    setDraftHistory([])
     setTurnSnapshot({
       board: cloneBoard(nextState.board),
       hand: [...nextState.playerHand],
@@ -371,8 +427,31 @@ export function RummikubGame() {
     setMessage('新しいゲームを開始しました。')
   }
 
+  function handleHandSortModeChange(mode: HandSortMode): void {
+    setHandSortMode(mode)
+    setDraft((current) => ({
+      ...current,
+      draftHand: sortPlayerHand(current.draftHand, mode),
+    }))
+    setTurnSnapshot((current) => ({
+      ...current,
+      hand: sortPlayerHand(current.hand, mode),
+    }))
+  }
+
+  function updateDraftWithHistory(updater: (currentDraft: DraftState) => DraftState): void {
+    const nextDraft = updater(draft)
+
+    if (getDraftSignature(nextDraft) === getDraftSignature(draft)) {
+      return
+    }
+
+    setDraftHistory((current) => [...current, cloneDraft(draft)])
+    setDraft(nextDraft)
+  }
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell density-${densityMode}`}>
       <header className="app-header">
         <div>
           <p className="eyebrow">Rummikub style duel</p>
@@ -383,6 +462,14 @@ export function RummikubGame() {
       <StatusBar state={gameState} message={message} isCpuThinking={isCpuThinking} />
       <GameResultDetails state={gameState} />
       <CpuHand hand={gameState.cpuHand} revealTiles={gameState.winner !== null} />
+      <GameTools
+        handSortMode={handSortMode}
+        densityMode={densityMode}
+        confirmBeforeEndTurn={confirmBeforeEndTurn}
+        onHandSortModeChange={handleHandSortModeChange}
+        onDensityModeChange={setDensityMode}
+        onConfirmBeforeEndTurnChange={setConfirmBeforeEndTurn}
+      />
       <GameBoard
         board={draft.draftBoard}
         lockedSetIds={lockedSetIds}
@@ -396,8 +483,11 @@ export function RummikubGame() {
       />
       <Controls
         canAct={canPlayerAct}
+        canEndTurn={canEndTurn}
         canDrawAndEndTurn={canDrawAndEndTurn}
+        canUndo={draftHistory.length > 0}
         hasBoardSelection={hasBoardSelection}
+        onUndo={handleUndoDraft}
         onReturnSelectedToHand={handleReturnSelectedToHand}
         onResetDraft={handleResetDraft}
         onEndTurn={handleEndTurn}
@@ -405,7 +495,7 @@ export function RummikubGame() {
         onNewGame={handleNewGame}
       />
       <PlayerHand
-        hand={draft.draftHand}
+        hand={sortedDraftHand}
         selectedTileId={selectedTileId}
         recentlyDrawnTileId={lastDrawnTileId}
         disabled={!canPlayerAct}
@@ -461,6 +551,17 @@ function takeSelectedTile(
 
 function removeEmptySets(board: TileSet[]): TileSet[] {
   return board.filter((set) => set.tiles.length > 0)
+}
+
+function cloneDraft(draft: DraftState): DraftState {
+  return {
+    draftBoard: cloneBoard(draft.draftBoard),
+    draftHand: [...draft.draftHand],
+  }
+}
+
+function sortPlayerHand(hand: Tile[], mode: HandSortMode): Tile[] {
+  return mode === 'number' ? sortHandByNumber(hand) : sortHand(hand)
 }
 
 function getSetIdContainingTile(board: TileSet[], tileId: string): string | null {
@@ -612,6 +713,10 @@ function getHandSignature(hand: Tile[]): string {
     .map((tile) => tile.id)
     .sort()
     .join('|')
+}
+
+function getDraftSignature(draft: DraftState): string {
+  return `${getBoardSignature(draft.draftBoard)}::${getHandSignature(draft.draftHand)}`
 }
 
 export default RummikubGame
